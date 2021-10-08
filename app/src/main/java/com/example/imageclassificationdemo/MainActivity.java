@@ -1,22 +1,34 @@
 package com.example.imageclassificationdemo;
 
-import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatActivity;
-
+import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
+import android.hardware.Camera;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
-import android.provider.MediaStore;
+
 import android.view.View;
-import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.ActionBar;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.tensorflow.lite.DataType;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.support.common.FileUtil;
@@ -27,27 +39,28 @@ import org.tensorflow.lite.support.image.ImageProcessor;
 import org.tensorflow.lite.support.image.TensorImage;
 import org.tensorflow.lite.support.image.ops.ResizeOp;
 import org.tensorflow.lite.support.image.ops.ResizeWithCropOrPadOp;
-import org.tensorflow.lite.support.image.ops.Rot90Op;
 import org.tensorflow.lite.support.label.TensorLabel;
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
     protected Interpreter tflite;
     private MappedByteBuffer tfliteModel;
     private TensorImage inputImageBuffer;
-    private  int imageSizeX;
-    private  int imageSizeY;
-    private  TensorBuffer outputProbabilityBuffer;
-    private  TensorProcessor probabilityProcessor;
+    private  int imageSizeX=224;
+    private  int imageSizeY=224;
+    private TensorBuffer outputProbabilityBuffer;
+    private TensorProcessor probabilityProcessor;
     private static final float IMAGE_MEAN = 0.0f;
     private static final float IMAGE_STD = 1.0f;
     private static final float PROBABILITY_MEAN = 0.0f;
@@ -56,33 +69,96 @@ public class MainActivity extends AppCompatActivity {
     private List<String> labels;
     ImageView imageView;
     Uri imageuri;
-    Button buclassify;
+    ImageView buclassify;
+    ImageView retake;
     TextView classitext;
+    ArrayList<RecipeModel> recipeModel= new ArrayList<>();
+    Boolean remake=true;
+
+
+
+    private Camera mCamera;
+    private HorizontalScrollView horizontalScrollView;
+    private final int PERMISSION_CALLBACK_CONSTANT = 1000;
+    ImageView ivCapture2;
+    ImageView ivCapture;
+    FrameLayout frameLayout;
+
+    ProgressBar progressBar;
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        imageView=(ImageView)findViewById(R.id.image);
-        buclassify=(Button)findViewById(R.id.classify);
-        classitext=(TextView)findViewById(R.id.classifytext);
+        frameLayout=findViewById(R.id.rlCameraPreview);
+        ivCapture2 = (ImageView) findViewById(R.id.ivCapture2);
+        ivCapture = (ImageView) findViewById(R.id.ivCapture);
+        horizontalScrollView = (HorizontalScrollView) findViewById(R.id.hscFilterLayout);
+        ActionBar actionBar = getSupportActionBar();
+        actionBar.hide();
+        checkAndGivePermission();
+        progressBar =(ProgressBar)findViewById(R.id.progressbar2);
+        progressBar.setVisibility(View.INVISIBLE);// initiate the progress bar
 
 
-        imageView.setOnClickListener(new View.OnClickListener() {
+        ivCapture.setOnClickListener(this);
+        buclassify=findViewById(R.id.classify);
+        retake=findViewById(R.id.retake);
+        retake.setVisibility(View.INVISIBLE);
+
+        retake.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v) {
-                Intent intent=new Intent();
-                intent.setType("image/*");
-                intent.setAction(Intent.ACTION_GET_CONTENT);
-                startActivityForResult(Intent.createChooser(intent,"Select Picture"),12);
+            public void onClick(View view) {
+                ivCapture2.setImageDrawable(null);
+                remake=true;
+                retake.setVisibility(View.GONE);
+                ivCapture.setVisibility(View.VISIBLE);
+                frameLayout.setVisibility(View.VISIBLE);
+                ivCapture2.setVisibility(View.GONE);
             }
         });
+
+        if(remake){
+            ivCapture2.setVisibility(View.GONE);
+            frameLayout.setVisibility(View.VISIBLE);
+            ivCapture.setVisibility(View.VISIBLE);
+        }
+        else {
+            frameLayout.setVisibility(View.GONE);
+            ivCapture.setVisibility(View.GONE);
+            ivCapture2.setVisibility(View.VISIBLE);
+        }
+
 
         try{
             tflite=new Interpreter(loadmodelfile(this));
         }catch (Exception e) {
             e.printStackTrace();
         }
+
+        try {
+            JSONObject object = new JSONObject(readJSON());
+            JSONArray array = object.getJSONArray("Recipe");
+            for (int i = 0; i < array.length(); i++) {
+
+                JSONObject jsonObject = array.getJSONObject(i);
+                String Name = jsonObject.getString("Name");
+                String Recipe = jsonObject.getString("Recipe");
+                String BuyLink = jsonObject.getString("BuyLink");
+                String ImageLink = jsonObject.getString("ImageLink");
+
+                recipeModel.add(new RecipeModel(Name,Recipe,BuyLink,ImageLink));
+
+//                Toast.makeText(getApplicationContext(),Name,Toast.LENGTH_SHORT).show();
+
+            }
+        } catch (JSONException e) {
+            Toast.makeText(getApplicationContext(),String.valueOf(e),Toast.LENGTH_SHORT).show();
+
+            e.printStackTrace();
+        }
+
+
 
         buclassify.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -113,6 +189,203 @@ public class MainActivity extends AppCompatActivity {
 
 
     }
+    
+    private void checkAndGivePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED &&
+                checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                    PERMISSION_CALLBACK_CONSTANT);
+        } else {
+            initialize();
+        }
+    }
+
+    private void initialize() {
+        mCamera = getCameraInstance();
+        CameraPreview mPreview = new CameraPreview(this, mCamera);
+        FrameLayout rlCameraPreview = (FrameLayout) findViewById(R.id.rlCameraPreview);
+        if (rlCameraPreview != null) {
+            rlCameraPreview.addView(mPreview);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if(requestCode == PERMISSION_CALLBACK_CONSTANT){
+            boolean allgranted = false;
+            for(int i=0;i<grantResults.length;i++){
+                if(grantResults[i] == PackageManager.PERMISSION_GRANTED){
+                    allgranted = true;
+                } else {
+                    allgranted = false;
+                    break;
+                }
+            }
+
+
+            if(allgranted){
+                initialize();
+            } else if(ActivityCompat.shouldShowRequestPermissionRationale(MainActivity.this, Manifest.permission.CAMERA)){
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    requestPermissions(new String[]{Manifest.permission.CAMERA},PERMISSION_CALLBACK_CONSTANT);
+                }
+            } else if(ActivityCompat.shouldShowRequestPermissionRationale(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE)){
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE
+                    },PERMISSION_CALLBACK_CONSTANT);
+                }
+            } else {
+                Toast.makeText(MainActivity.this,"Permission is mandatory, Try giving it from App Settings", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+
+
+    public static Camera getCameraInstance(){
+        Camera c = null;
+        try {
+            c = Camera.open();
+        }
+        catch (Exception e){
+            e.printStackTrace();
+        }
+        return c;
+    }
+
+    public void colorEffectFilter(View v){
+        try {
+            Camera.Parameters parameters = mCamera.getParameters();
+            switch (v.getId()) {
+                case R.id.rlNone:
+                    parameters.setColorEffect(Camera.Parameters.EFFECT_NONE);
+                    mCamera.setParameters(parameters);
+                    break;
+                case R.id.rlAqua:
+                    parameters.setColorEffect(Camera.Parameters.EFFECT_AQUA);
+                    mCamera.setParameters(parameters);
+                    break;
+                case R.id.rlBlackBoard:
+                    parameters.setColorEffect(Camera.Parameters.EFFECT_BLACKBOARD);
+                    mCamera.setParameters(parameters);
+                    break;
+                case R.id.rlMono:
+                    parameters.setColorEffect(Camera.Parameters.EFFECT_MONO);
+                    mCamera.setParameters(parameters);
+                    break;
+                case R.id.rlNegative:
+                    parameters.setColorEffect(Camera.Parameters.EFFECT_NEGATIVE);
+                    mCamera.setParameters(parameters);
+                    break;
+                case R.id.rlPosterized:
+                    parameters.setColorEffect(Camera.Parameters.EFFECT_POSTERIZE);
+                    mCamera.setParameters(parameters);
+                    break;
+                case R.id.rlSepia:
+                    parameters.setColorEffect(Camera.Parameters.EFFECT_SEPIA);
+                    mCamera.setParameters(parameters);
+                    break;
+                case R.id.rlSolarized:
+                    parameters.setColorEffect(Camera.Parameters.EFFECT_SOLARIZE);
+                    mCamera.setParameters(parameters);
+                    break;
+                case R.id.rlWhiteBoard:
+                    parameters.setColorEffect(Camera.Parameters.EFFECT_WHITEBOARD);
+                    mCamera.setParameters(parameters);
+                    break;
+            }
+        }catch (Exception ex){
+        }
+    }
+
+    private Camera.PictureCallback mPicture = new Camera.PictureCallback() {
+        @Override
+        public void onPictureTaken(byte[] data, Camera camera) {
+            bitmap = BitmapFactory.decodeByteArray(data, 0,
+                    data.length);
+           mCamera.startPreview();
+            // Rotate Image
+            Matrix rotateMatrix = new Matrix();
+            Bitmap rotatedBitmap;
+            rotateMatrix.postRotate(90);
+            rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), rotateMatrix, false);
+            ivCapture2.setImageBitmap(rotatedBitmap);
+            retake.setVisibility(View.VISIBLE);
+
+
+
+
+//            File pictureFile = getOutputMediaFile();
+//            if (pictureFile == null){
+//                Log.d(TAG, "Error creating media file, check storage permissions: ");
+//                return;
+//            }
+//
+//            MediaScannerConnection.scanFile(MainActivity.this,
+//                    new String[] { pictureFile.toString() }, null,
+//                    new MediaScannerConnection.OnScanCompletedListener() {
+//                        public void onScanCompleted(String path, Uri uri) {
+//
+//                            mCamera.startPreview();
+//    }
+//});
+//            try {
+//                FileOutputStream fos = new FileOutputStream(pictureFile);
+//                fos.write(data);
+//                fos.close();
+//            } catch (FileNotFoundException e) {
+//                e.printStackTrace();
+//            } catch (IOException e) {
+//                e.printStackTrace();
+//            }
+        }
+    };
+
+
+
+    @Override
+    public void onClick(View v) {
+        switch (v.getId()){
+
+            case R.id.ivCapture:
+                progressBar.setVisibility(View.VISIBLE);
+                ivCapture.setVisibility(View.GONE);
+                remake=false;
+                retake.setVisibility(View.VISIBLE);
+                mCamera.takePicture(null,null,mPicture);
+                    frameLayout.setVisibility(View.GONE);
+                    ivCapture2.setVisibility(View.VISIBLE);
+                progressBar.setVisibility(View.GONE);
+                break;
+
+        }
+    }
+
+//    @Override
+//    protected void onPause() {
+//        super.onPause();
+//        if(mCamera != null) {
+//            mCamera.stopPreview();
+//            mCamera.release();
+//        }
+//    }
+//
+//    @Override
+//    protected void onDestroy() {
+//        super.onDestroy();
+//        if(mCamera != null) {
+//            mCamera.release();
+//            mCamera = null;
+//        }
+//    }
+//    @Override
+//    protected void onResume() {
+//        super.onResume();
+//        mCamera.startPreview();
+//
+//    }
 
     private TensorImage loadImage(final Bitmap bitmap) {
         // Loads bitmap into a TensorImage.
@@ -145,7 +418,6 @@ public class MainActivity extends AppCompatActivity {
     private TensorOperator getPostprocessNormalizeOp(){
         return new NormalizeOp(PROBABILITY_MEAN, PROBABILITY_STD);
     }
-
     private void showresult(){
 
         try{
@@ -159,25 +431,84 @@ public class MainActivity extends AppCompatActivity {
         float maxValueInMap =(Collections.max(labeledProbability.values()));
 
         for (Map.Entry<String, Float> entry : labeledProbability.entrySet()) {
+
             if (entry.getValue()==maxValueInMap) {
-                classitext.setText(entry.getKey());
+                float confi = 100 * entry.getValue();
+
+                if (confi > 90) {
+
+
+                    for (int i = 0; i < recipeModel.size(); i++) {
+                        if (recipeModel.get(i).getName().equals(entry.getKey()) && confi > 70) {
+                            ArrayList<RecipeModel> yo;
+                            yo = new ArrayList<>();
+                            yo.add(new RecipeModel(recipeModel.get(i).getName(), recipeModel.get(i).getRecipe(), String.valueOf(confi), recipeModel.get(i).getImageLink()));
+                            Intent myIntent = new Intent(MainActivity.this, Recipe.class);
+                            myIntent.putExtra("key", yo);
+                            MainActivity.this.startActivity(myIntent);
+                            ivCapture2.setImageDrawable(null);
+                            remake = true;
+                            retake.setVisibility(View.GONE);
+                            ivCapture.setVisibility(View.VISIBLE);
+                            frameLayout.setVisibility(View.VISIBLE);
+                            ivCapture2.setVisibility(View.GONE);
+
+                        }
+                    }
+                }else {
+                    Toast.makeText(getApplicationContext(),"Not detected please retake an image",Toast.LENGTH_SHORT).show();
+
+                }
+
+
+
+
             }
+
         }
     }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
+//    public void rotateImage(Bitmap bitmap) {
+//        ExifInterface exifInterface=null;
+//        try{
+//            exifInterface=new ExifInterface();
+//        }catch (IOException e){
+//            e.printStackTrace();
+//        }
+//        int orientation=exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION,ExifInterface.ORIENTATION_UNDEFINED);
+//        Matrix matrix=new Matrix();
+//        switch (orientation){
+//            case ExifInterface.ORIENTATION_ROTATE_90:
+//                matrix.setRotate(90);
+//                break;
+//            case ExifInterface.ORIENTATION_ROTATE_180:
+//                matrix.setRotate(180);
+//                break;
+//            default:
+//        }
+//        Bitmap rotatedBitmap=Bitmap.createBitmap(bitmap,0,0,bitmap.getWidth(),bitmap.getHeight(),matrix,true);
+//
+//    }
 
-        if(requestCode==12 && resultCode==RESULT_OK && data!=null) {
-            imageuri = data.getData();
-            try {
-                bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), imageuri);
-                imageView.setImageBitmap(bitmap);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+    public String readJSON() {
+        String json = null;
+        try {
+            // Opening data.json file
+            InputStream inputStream = getAssets().open("Recipe.json");
+            int size = inputStream.available();
+            byte[] buffer = new byte[size];
+            // read values in the byte array
+            inputStream.read(buffer);
+            inputStream.close();
+            // convert byte to string
+            json = new String(buffer, "UTF-8");
+        } catch (IOException e) {
+            e.printStackTrace();
+            return json;
         }
+        return json;
     }
 }
+
+
 

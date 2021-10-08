@@ -1,41 +1,99 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MainActivity">
+    tools:context=".MainActivity"
+    android:background="@color/colorPrimaryDark">
 
-    <TextView
+
+    <ProgressBar
+        android:layout_height="wrap_content"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/classifytext"
-        android:layout_above="@+id/image"
         android:layout_centerHorizontal="true"
-        android:layout_marginBottom="50dp"
-        android:text="Click below to select a Image"
-        android:textStyle="bold"
-        android:textSize="20dp">
-
-    </TextView>
-    <ImageView
-        android:layout_width="300dp"
-        android:layout_height="300dp"
         android:layout_centerVertical="true"
-        android:src="@color/colorAccent"
-        android:layout_centerHorizontal="true"
-        android:id="@+id/image">
-    </ImageView>
-    <Button
+        android:id="@+id/progressbar2"
+       />
+
+    <LinearLayout
         android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        >
+
+        <FrameLayout
+            android:id="@+id/rlCameraPreview2"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_gravity="center" >
+
+            <FrameLayout
+                android:id="@+id/rlCameraPreview"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:layout_gravity="center" >
+
+
+
+            </FrameLayout>
+
+            <ImageView
+                android:id="@+id/ivCapture2"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/colorPrimaryDark"
+                android:visibility="invisible"
+                />
+        </FrameLayout>
+
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/colorPrimaryDark"
+            android:padding="20dp">
+
+            <ImageView
+                android:id="@+id/ivCapture"
+                android:layout_width="match_parent"
+                android:layout_height="100dp"
+                android:src="@drawable/capture"
+                android:layout_centerVertical="true"
+                />
+
+
+            <ImageView
+                android:id="@+id/classify"
+                android:layout_width="70dp"
+                android:layout_height="70dp"
+                android:src="@drawable/classify"
+                android:layout_centerVertical="true"
+                android:layout_alignParentRight="true"
+                android:text="classify"
+                android:layout_margin="10dp"
+                />
+
+            <ImageView
+                android:id="@+id/retake"
+                android:layout_width="70dp"
+                android:layout_height="70dp"
+                android:src="@drawable/retake"
+                android:layout_centerVertical="true"
+                android:layout_alignParentStart="true"
+                android:layout_margin="10dp"
+                android:text="retake"
+                />
+
+        </RelativeLayout>
+
+    </LinearLayout>
+
+    <include android:id="@+id/vFilters"
         android:layout_height="wrap_content"
-        android:id="@+id/classify"
-        android:layout_centerHorizontal="true"
-        android:layout_below="@+id/image"
-        android:layout_margin="50dp"
-        android:text="Classify"
-        android:background="#fff"
-        android:textColor="#000">
-    </Button>
+        android:layout_width="wrap_content"
+        layout="@layout/layout_filter_view"
+        />
 
 </RelativeLayout>
